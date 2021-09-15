@@ -1,0 +1,158 @@
+---
+title: "google_bike _rides"
+author: "Abo Yehia"
+date: "15/09/2021"
+output: html_document
+---
+## loading libraries
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(janitor)
+```
+
+## loading file
+
+```{r}
+aug_2020<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202008-divvy-tripdata.csv")
+sep_2020<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202009-divvy-tripdata.csv")
+oct_2020<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202010-divvy-tripdata.csv")
+nov_2020<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202011-divvy-tripdata.csv")
+dec_2020<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202012-divvy-tripdata.csv")
+jan_2021<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202101-divvy-tripdata.csv")
+feb_2021<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202102-divvy-tripdata.csv")
+mar_2021<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202103-divvy-tripdata.csv")
+april_2021<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202104-divvy-tripdata.csv")
+may_2021<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202105-divvy-tripdata.csv")
+june_2021<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202106-divvy-tripdata.csv")
+july_2021<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202107-divvy-tripdata.csv")
+aug_2021<- read.csv("C:\\Users\\al-khateb\\Desktop\\Cyclic capstone project\\202108-divvy-tripdata.csv")
+```
+## combine files in 1 data frame
+```{r}
+bike_riders<- rbind(aug_2020, sep_2020, oct_2020, nov_2020,dec_2020,jan_2021,feb_2021,mar_2021,april_2021,may_2021,june_2021,july_2021,aug_2021)
+```
+## clean empty
+```{r}
+bike_riders<- janitor::remove_empty(bike_riders,which = c("cols"))
+bike_riders<- janitor::remove_empty(bike_riders,which = c("rows"))
+```
+
+bike_riders<- janitor::remove_empty(bike_riders,which = c("cols"))
+bike_riders<- janitor::remove_empty(bike_riders,which = c("rows"))
+
+## inspect the new data frame
+```{r}
+View(bike_riders)
+```
+
+## convert character type to data/time in start_at , end_at
+```{r}
+bike_riders$started_at<- lubridate::ymd_hms(bike_riders$started_at)
+bike_riders$ended_at<- lubridate::ymd_hms(bike_riders$ended_at)
+```
+
+## convert character type to numeric in start_station_id , end_station_id
+```{r}
+bike_riders$start_station_id<- as.numeric(bike_riders$start_station_id)
+bike_riders$end_station_id<- as.numeric(bike_riders$end_station_id)
+```
+
+##  In the "member_casual" column, there are two names for members and two names for casual riders
+```{r}
+bike_riders <- bike_riders %>% 
+  mutate(member_casual= recode(member_casual,"Subscriber" = "member", "Customer"= "casual"))
+```
+
+## add some additional columns of data -- such as day, month, year -- that provide additional opportunities to aggregate the data.
+```{r}
+bike_riders$date <- as.Date(bike_riders$started_at)
+bike_riders$month<- format(as.Date(bike_riders$date),"%m")
+bike_riders$day<- format(as.Date(bike_riders$date),"%d")
+bike_riders$year<- format(as.Date(bike_riders$date),"%Y")
+bike_riders$day_of_Week<- format(as.Date(bike_riders$date),"%a")
+## calculate ride length in seconds
+bike_riders$ride_length<- difftime(bike_riders$ended_at,bike_riders$started_at,units = "mins")
+```
+
+## Inspect the structure of the columns
+```{r}
+str(bike_riders)
+
+```
+
+## remove "bad" data
+```{r}
+bike_riders_v2 <- bike_riders[!(bike_riders$ride_length<0),]
+View(bike_riders_v2)
+```
+
+## descriptive analysis on ride_length 
+```{r}
+mean(bike_riders_v2$ride_length)
+median(bike_riders_v2$ride_length)
+max(bike_riders_v2$ride_length)
+min((bike_riders_v2$ride_length))
+```
+
+## compare members and casual users
+```{r}
+aggregate(bike_riders_v2$ride_length ~ bike_riders_v2$member_casual, FUN = mean)
+aggregate(bike_riders_v2$ride_length ~ bike_riders_v2$member_casual, FUN = median)
+aggregate(bike_riders_v2$ride_length ~ bike_riders_v2$member_casual, FUN = max)
+aggregate(bike_riders_v2$ride_length ~ bike_riders_v2$member_casual, FUN = min)
+```
+
+## average ride time by each day for members vs casual users
+```{r}
+aggregate(bike_riders_v2$ride_length ~ bike_riders_v2$member_casual + bike_riders_v2$day_of_Week,FUN = mean)
+bike_riders_v2$day_of_Week<- ordered(bike_riders_v2$day_of_Week,levels=c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"))
+```
+
+## analyze ridership data by type and weekday
+```{r}
+bike_riders_v2 %>% 
+  mutate(weekday =wday(started_at , label = TRUE)) %>% 
+  group_by(member_casual,weekday) %>% 
+  summarise(number_of_rides = n(),average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)
+```
+
+## visualize the number of rides by rider 
+```{r}
+library(scales)
+bike_riders_v2 %>% 
+  mutate(weekday =wday(started_at , label = TRUE)) %>% 
+  group_by(member_casual,weekday) %>% 
+  summarise(number_of_rides = n(),average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday) %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge"  ) +labs(title =  "Number of rides by rider type", caption = "figure 1")+ 
+  scale_y_continuous(labels = comma)
+```
+### The figure 1 shows that the bike usage of annual members are relatively stable throughout the week, while casual riders tend to spike up during Saturdays and Sundays
+
+## create a visualization for average duration
+```{r}
+bike_riders_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge") + labs(title =  "Average Duration by Weekday" , caption = "figure 2")
+
+```
+### The figure 2 shows that Throughout the week, casual riders tend to use the bikes a lot more compared to annual
+
+
+## Key Takeaways:
+
+* Annual members consistently use the bikes during the whole week, while casual riders tend to spike on weekends (Saturday and Sunday)
+* Casual riders tend to use the bikes for a lot longer duration compared to annual members in all days of the week.
+
+## Recommendations:
+* Create an incentive program for annual members that rewards ride duration over the number of rides.
+* Add incentives for annual members who use the bikes in the weekends.
